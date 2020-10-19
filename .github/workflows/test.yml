@@ -1,0 +1,52 @@
+name: docker
+
+on:
+  push:
+    branches:
+      - master
+
+  pull_request:
+    branches:
+      - master
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+
+      - uses: actions/setup-go@v2
+        with:
+          go-version: '1.15'
+
+      - name: Start application
+        run: |
+          go build ./cmd/main.go
+          ./main --port=3000 &
+          sleep 5
+
+      - name: Check api (response code is 200/400)
+        run: |
+          echo ::set-env name=API_200_CONTENT_TYPE_STATUS_CODE::$(if [[ $(curl -s -X POST localhost:3000/api/slow -H "Content-Type: application/json" -d '{"timeout":3000}' -o /dev/null -w '%{content_type} %{response_code}') == 'application/json 200' ]]; then echo OK; else echo FAIL; fi)
+          echo ::set-env name=API_200_TIME_MORE::$(if [[ $(curl -s -X POST localhost:3000/api/slow -H "Content-Type: application/json" -d '{"timeout":3000}' -o /dev/null -w '%{time_total}') > '3' ]]; then echo OK; else echo FAIL; fi)
+          echo ::set-env name=API_200_TIME_LESS::$(if [[ $(curl -s -X POST localhost:3000/api/slow -H "Content-Type: application/json" -d '{"timeout":3000}' -o /dev/null -w '%{time_total}') < '4' ]]; then echo OK; else echo FAIL; fi)
+          echo ::set-env name=API_200_BODY::$(if [[ $(curl -s -X POST localhost:3000/api/slow -H "Content-Type: application/json" -d '{"timeout":3000}') == '{"status":"ok"}' ]]; then echo OK; else echo FAIL; fi)
+          echo ::set-env name=API_400_CONTENT_TYPE_STATUS_CODE::$(if [[ $(curl -s -X POST localhost:3000/api/slow -H "Content-Type: application/json" -d '{"timeout":7000}' -o /dev/null -w '%{content_type} %{response_code}') == 'application/json 400' ]]; then echo OK; else echo FAIL; fi)
+          echo ::set-env name=API_400_TIME_MORE::$(if [[ $(curl -s -X POST localhost:3000/api/slow -H "Content-Type: application/json" -d '{"timeout":7000}' -o /dev/null -w '%{time_total}') > '5' ]]; then echo OK; else echo FAIL; fi)
+          echo ::set-env name=API_400_TIME_LESS::$(if [[ $(curl -s -X POST localhost:3000/api/slow -H "Content-Type: application/json" -d '{"timeout":7000}' -o /dev/null -w '%{time_total}') < '6' ]]; then echo OK; else echo FAIL; fi)
+          echo ::set-env name=API_400_BODY::$(if [[ $(curl -s -X POST localhost:3000/api/slow -H "Content-Type: application/json" -d '{"timeout":7000}') == '{"error":"timeout too long"}' ]]; then echo OK; else echo FAIL; fi)
+
+      - name: Print test results
+        run: |
+          echo $API_200_CONTENT_TYPE_STATUS_CODE
+          echo $API_200_TIME_MORE
+          echo $API_200_TIME_LESS
+          echo $API_200_BODY
+          echo $API_400_CONTENT_TYPE_STATUS_CODE
+          echo $API_400_TIME_MORE
+          echo $API_400_TIME_LESS
+          echo $API_400_BODY
+
+      - name: Tests fail
+        run: exit 1
+        if: env.API_200_CONTENT_TYPE_STATUS_CODE == 'FAIL' || env.API_200_TIME_MORE == 'FAIL' || env.API_200_TIME_LESS == 'FAIL' || env.API_200_BODY == 'FAIL' || env.API_400_CONTENT_TYPE_STATUS_CODE == 'FAIL' || env.API_400_TIME_MORE == 'FAIL' || env.API_400_TIME_LESS == 'FAIL' || env.API_400_BODY == 'FAIL'
