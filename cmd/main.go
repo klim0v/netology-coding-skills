@@ -91,7 +91,7 @@ func slowHandler(ctx *fasthttp.RequestCtx) {
 		case <-timer:
 			ctx.SuccessString("application/json", "{\"status\":\"ok\"}")
 			return
-		default:
+		case <-time.After(time.Millisecond):
 			if ctx.LastTimeoutErrorResponse() == nil {
 				continue
 			}
